@@ -10,28 +10,6 @@ function App() {
   const [filterType, setFilterType] = useState('Day')
   const [isFilterOpen, setIsFilterOpen] = useState(false)
 
-  const handleAdd = async () => {
-    try {
-      if (!searchResult) return;
-      
-      // Use the same increment endpoint for Add button
-      // Add points
-      await axios.post(
-        `http://localhost:4000/api/leaderboard/${searchResult.id}/add`
-      );
-
-      // Update the search result
-      const updatedUser = await axios.get(`http://localhost:4000/api/leaderboard/${searchResult.id}`);
-      setSearchResult(updatedUser.data);
-      console.log('Updated points from server:', updatedUser.data.points);
-      
-      // Refresh the leaderboard in background
-      fetchLeaderboard();
-    } catch (error) {
-      console.error('Error adding points:', error);
-    }
-  }
-
   const handleStart = async (userId) => {
     try {
       console.log(`Starting session for user ${userId}`);
@@ -182,12 +160,7 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <button
-                  onClick={handleAdd}
-                  className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md mt-2"
-                >
-                  Add
-                </button>
+
               </>
             ) : searchError && (
               <div className="text-center py-8 bg-gray-800 rounded-lg">
