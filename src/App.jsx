@@ -9,6 +9,11 @@ function App() {
   const [searchError, setSearchError] = useState(false)
   const [filterType, setFilterType] = useState('Day')
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newUser, setNewUser] = useState({
+    name: '',
+    points: 0
+  })
 
   const handleStart = async (userId) => {
     try {
@@ -36,15 +41,15 @@ function App() {
 
   const fetchLeaderboard = async () => {
     try {
-      const response = await axios.get(`http://localhost:4000/api/leaderboard`)
-      // Sort users by points in descending order and update ranks
-      const sortedUsers = response.data.sort((a, b) => b.points - a.points)
-        .map((user, index) => ({
-          ...user,
-          rank: index + 1 // Update rank based on sorted position
-        }));
-      setUsers(sortedUsers)
+      const response = await axios.get(`http://localhost:4000/api/leaderboard`, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+      // Keep the order from the backend (sorted by ID)
+      setUsers(response.data)
       setSearchResult(null)
+      setSearchError(false)
     } catch (error) {
       console.error('Error fetching leaderboard:', error)
     }
@@ -56,12 +61,13 @@ function App() {
     if (e.target.value) {
       try {
         const response = await axios.get(`http://localhost:4000/api/leaderboard/${e.target.value}`)
-        setSearchResult(response.data)
-        setUsers([])
+        setSearchResult(response.data.searchedEntry)
+        setUsers(response.data.otherEntries)
       } catch (error) {
         console.error('Error searching:', error)
         setSearchResult(null)
         setSearchError(true)
+        fetchLeaderboard()
       }
     } else {
       setSearchResult(null)
@@ -76,6 +82,70 @@ function App() {
     fetchLeaderboard()
   }
 
+  const handleRecalculate = async () => {
+    try {
+      console.log('Sending recalculate request...');
+      const response = await axios.post('http://localhost:4000/api/leaderboard/recalculate');
+      console.log('Recalculate response:', response.data);
+      
+      // Update users with the sorted data (already sorted by rank)
+      setUsers(response.data);
+      
+      // If there's a search result, we need to update its rank too
+      if (searchResult) {
+        const updatedSearchResult = response.data.find(entry => entry.id === searchResult.id);
+        if (updatedSearchResult) {
+          setSearchResult(updatedSearchResult);
+        }
+      }
+    } catch (error) {
+      console.error('Error recalculating leaderboard:', error);
+    }
+  }
+
+  const handleAddUser = async (e) => {
+    e.preventDefault()
+    try {
+      console.log('Adding new user:', newUser)
+      // Send only name and points
+      const response = await axios.post('http://localhost:4000/api/leaderboard', {
+        name: newUser.name,
+        points: newUser.points || 0
+      });
+      console.log('New user added:', response.data)
+      // Reset form
+      setNewUser({ name: '', points: 0 })
+      setShowAddForm(false)
+      // Refresh leaderboard
+      fetchLeaderboard()
+    } catch (error) {
+      console.error('Error adding new user:', error)
+    }
+  }
+
+  const renderUserEntry = (user) => (
+    <div key={user.id} className="bg-gray-700 rounded-lg p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <span className="text-2xl font-bold">#{user.rank}</span>
+          <div>
+            <h3 className="font-semibold">{user.name}</h3>
+            <p className="text-sm text-gray-400">ID: {user.id}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-xl">{user.points} points</span>
+          <button
+            onClick={() => handleStart(user.id)}
+            className="bg-green-600 px-4 py-2 rounded-md hover:bg-green-500"
+          >
+            Start
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   useEffect(() => {
     fetchLeaderboard()
   }, [])
@@ -87,10 +157,16 @@ function App() {
         <div className="flex justify-between items-center mb-6">
           <div className="flex gap-4">
             <button
-              onClick={fetchLeaderboard}
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="bg-blue-600 px-4 py-2 rounded-md hover:bg-blue-500"
+            >
+              Add New User
+            </button>
+            <button
+              onClick={handleRecalculate}
               className="bg-gray-700 px-4 py-2 rounded-md hover:bg-gray-600"
             >
-              Refresh
+              Recalculate
             </button>
           </div>
           {/* Search Section */}
@@ -129,6 +205,50 @@ function App() {
           </div>
         </div>
 
+        {/* Add User Form */}
+        {showAddForm && (
+          <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+            <h2 className="text-xl mb-4">Add New User</h2>
+            <form onSubmit={handleAddUser} className="space-y-4">
+              <div>
+                <label className="block mb-1">Name:</label>
+                <input
+                  type="text"
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  className="w-full p-2 rounded bg-gray-700"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Initial Points:</label>
+                <input
+                  type="number"
+                  value={newUser.points}
+                  onChange={(e) => setNewUser({ ...newUser, points: parseInt(e.target.value) })}
+                  className="w-full p-2 rounded bg-gray-700"
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="bg-blue-600 px-4 py-2 rounded-md hover:bg-blue-500"
+                >
+                  Add User
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="bg-gray-700 px-4 py-2 rounded-md hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {/* Filter Type Display */}
         <div className="mb-6">
           <div className="text-sm text-gray-400">
@@ -137,65 +257,24 @@ function App() {
         </div>
 
         {/* Search Result */}
-        {searchId && (
-          <div className="space-y-2 mb-4">
-            {searchResult ? (
-              <>
-                <div
-                  key={searchResult.id}
-                  className="bg-gray-800 p-4 rounded-lg flex justify-between items-center"
-                >
-                  <div className="flex gap-4">
-                    <span className="text-gray-400">{searchResult.id}</span>
-                    <span>{searchResult.name}</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <span>{searchResult.points}</span>
-                    <span className="text-gray-400">#{searchResult.rank}</span>
-                    <button 
-                      className="bg-green-600 hover:bg-green-700 px-4 py-1 rounded-md ml-4"
-                      onClick={() => handleStart(searchResult.id)}
-                    >
-                      Start
-                    </button>
-                  </div>
-                </div>
-
-              </>
-            ) : searchError && (
-              <div className="text-center py-8 bg-gray-800 rounded-lg">
-                <p className="text-gray-400 text-lg">No data available</p>
-              </div>
-            )}
+        {searchResult && (
+          <div className="mb-6">
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-4 text-blue-400">Searched Result:</h3>
+              {renderUserEntry(searchResult)}
+            </div>
+            <div className="mt-6 border-t border-gray-700 pt-6">
+              <h3 className="text-lg font-semibold mb-4 text-gray-400">Other Entries:</h3>
+            </div>
           </div>
         )}
 
-        {/* Leaderboard Table */}
-        {!searchResult && (
-          <div className="space-y-2">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className="bg-gray-800 p-4 rounded-lg flex justify-between items-center"
-              >
-                <div className="flex gap-4">
-                  <span className="text-gray-400">{user.id}</span>
-                  <span>{user.name}</span>
-                </div>
-                <div className="flex gap-4">
-                  <span>{user.points}</span>
-                  <span className="text-gray-400">#{user.rank}</span>
-                  <button 
-                    className="bg-green-600 hover:bg-green-700 px-4 py-1 rounded-md ml-4"
-                    onClick={() => handleStart(user.id)}
-                  >
-                    Start
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Leaderboard List */}
+        <div className="space-y-2">
+          {Array.isArray(users) && users
+            .filter(user => !searchResult || user.id !== searchResult.id)
+            .map(renderUserEntry)}
+        </div>
       </div>
     </div>
   )
